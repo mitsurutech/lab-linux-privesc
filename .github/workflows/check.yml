@@ -12,10 +12,10 @@ jobs:
           python3 - <<'PY'
           import yaml
           d = yaml.safe_load(open('linux-privesc.lab.yaml'))
-          for key in ('cpus', 'memory', 'disk', 'setup', 'check'):
+          for key in ('cpus', 'memory', 'disk', 'setup'):
               assert key in d, f'no {key}'
-          for key in ('setup', 'check'):
-              size = len(d[key].encode())
-              assert size <= 16384, f'{key} is {size} bytes, over 16 KB'
+          assert 'check' not in d, 'this lab is read by the teacher: it has no check'
+          size = len(d['setup'].encode())
+          assert size <= 16384, f'setup is {size} bytes, over 16 KB'
           print('linux-privesc.lab.yaml ok')
           PY
