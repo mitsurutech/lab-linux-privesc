@@ -1,0 +1,105 @@
+# Linux privilege escalation
+# One Ubuntu VM with a low-privilege account, intern, and three ordinary administrator
+# mistakes left for it to find: a setuid helper, a passwordless sudo rule and a writable
+# script root's own cron runs every minute.
+cpus: 1
+memory: 1024    # MB
+disk: 6         # GB
+
+# Nothing opens in the browser: the lab is the terminal.
+open: []
+
+# Run once, as root. Its output is kept in /var/log/mitsurutech-setup.log on the VM.
+setup: |
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update -qq
+  apt-get install -y -qq cron vim
+  FLAG=$(head -c 24 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 32)
+  echo "$FLAG" > /root/flag.txt
+  chmod 600 /root/flag.txt
+  chown root:root /root/flag.txt
+  id intern >/dev/null 2>&1 || useradd -m -s /bin/bash intern
+  echo 'intern:StudentLab2026' | chpasswd
+  # A diagnostics helper somebody made so intern could search the logs without the root
+  # password, a copy of find carrying the setuid bit find was never meant to have.
+  cp /usr/bin/find /usr/local/bin/sysfind
+  chown root:root /usr/local/bin/sysfind
+  chmod 4755 /usr/local/bin/sysfind
+  # A sudo rule somebody added so intern could edit a config file as root with vim, with no
+  # password, and never narrowed down afterwards.
+  mkdir -p /etc/sudoers.d
+  cat > /etc/sudoers.d/90-lab-intern <<'SUDOERS_END'
+  intern ALL=(root) NOPASSWD: /usr/bin/vim
+  SUDOERS_END
+  chmod 440 /etc/sudoers.d/90-lab-intern
+  visudo -cf /etc/sudoers.d/90-lab-intern >/dev/null 2>&1
+  # A maintenance script root's own cron runs every minute, left writable by anybody at all.
+  mkdir -p /opt/maintenance
+  cat > /opt/maintenance/cleanup.sh <<'CLEANUP_END'
+  #!/bin/bash
+  find /tmp -type f -mmin +60 -delete 2>/dev/null
+  CLEANUP_END
+  chmod 777 /opt/maintenance/cleanup.sh
+  chown root:root /opt/maintenance/cleanup.sh
+  ( crontab -l -u root 2>/dev/null; echo "* * * * * /opt/maintenance/cleanup.sh" ) | crontab -u root -
+  home=/home/student
+  [ -d $home ] || home=/root
+  cat > $home/README.md <<'PRIVESC_README_END'
+  # Lab: Linux privilege escalation
+
+  This is a security exercise inside your own private virtual machine. Attack only this
+  machine: it has no route to any other student's machine or to anything else on the internet,
+  and the only way out of it at all is a narrow proxy that allows Ubuntu's own package archive,
+  PyPI, npm and GitHub, nothing else. Never point anything you learn here at a machine that is
+  not your own: under the Computer Misuse Act 1990, doing so without permission is a criminal
+  offence.
+
+  A second account already exists on this machine, called intern. Its password is
+  StudentLab2026. Switch to it from your own shell with:
+
+      su - intern
+
+  intern has no sudo rights of its own and does not know the root password. Somewhere on this
+  machine, root has left at least one ordinary mistake that lets intern reach root anyway: a
+  program that runs with more privilege than it should, a sudo rule that was never narrowed
+  down, or a scheduled job that trusts a file it should not. Find one, use it, and read
+  /root/flag.txt.
+
+  Prove it by saving the exact contents of /root/flag.txt into /home/intern/proof.txt, owned by
+  intern, not by student or root. Then write /home/intern/report.txt, also owned by intern,
+  saying in your own words which weakness got you there.
+
+  This lab does not ask you to fix what you found afterwards: leaving the weaknesses in place
+  is part of how the mark is checked, and a teacher may set remediation as separate, further
+  work.
+  PRIVESC_README_END
+  chown student:student $home/README.md 2>/dev/null
+  echo "Read README.md in your home folder first." > /etc/motd
+
+# Marks a handed-in VM, KAN-29: run as root on a copy of the saved disk after a fresh boot, so
+# it sees only what was saved. Its exit status is the result: 0 passes.
+check: |
+  fail() {
+    echo "NOT PASSED: $*"
+    exit 1
+  }
+  FLAG=$(cat /root/flag.txt 2>/dev/null)
+  [ -n "$FLAG" ] || fail "no flag was seeded on this VM: the lab did not set up correctly"
+  PROOF=/home/intern/proof.txt
+  REPORT=/home/intern/report.txt
+  [ -f "$PROOF" ] || fail "intern has not saved /home/intern/proof.txt"
+  [ -f "$REPORT" ] || fail "intern has not saved /home/intern/report.txt: say which weakness you used"
+  [ -s "$REPORT" ] || fail "report.txt is empty: say which weakness you used"
+  # A proof written by student's own built-in sudo, rather than by intern reaching root, is not
+  # evidence of anything: intern already has passwordless root in this VM, which is the one
+  # shortcut the check has to refuse.
+  [ "$(stat -c %U "$PROOF" 2>/dev/null)" = "intern" ] || fail "proof.txt is not owned by intern: it looks like it was written by another account rather than by intern reaching root"
+  [ "$(stat -c %U "$REPORT" 2>/dev/null)" = "intern" ] || fail "report.txt is not owned by intern"
+  [ "$(cat "$PROOF")" = "$FLAG" ] || fail "proof.txt does not match the flag"
+  grep -qiE 'suid|setuid|find|sudo|vim|cron|maintenance|cleanup' "$REPORT" || fail "report.txt does not name a recognisable weakness: suid helper, sudo rule or the cron job"
+  # Removing a weakness to hide how root was reached is not a fix, it is erasing the evidence,
+  # so the check asks for all three to still be exactly as the setup left them.
+  [ -u /usr/local/bin/sysfind ] || fail "the setuid bit on the helper is gone: the weakness it checks for must still be there"
+  grep -q '^intern ALL=(root) NOPASSWD: /usr/bin/vim$' /etc/sudoers.d/90-lab-intern 2>/dev/null || fail "the sudo rule for intern is gone or was changed"
+  [ "$(stat -c %a /opt/maintenance/cleanup.sh 2>/dev/null)" = "777" ] || fail "the maintenance script's permissions changed: it should still be world-writable"
+  echo "PASSED: intern reached root, the flag matches, the report names a weakness, and none of the three weaknesses was removed to hide how it was done"
