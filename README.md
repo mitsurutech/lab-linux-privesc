@@ -1,5 +1,7 @@
 # Linux privilege escalation lab: a setuid binary, a sudo rule and a writable cron job
 
+[English](README.md) | [Français](README.fr.md) | [日本語](README.ja.md) | [Español](README.es.md)
+
 [![check](https://github.com/mitsurutech/lab-linux-privesc/actions/workflows/check.yml/badge.svg)](https://github.com/mitsurutech/lab-linux-privesc/actions/workflows/check.yml)
 
 A ready-made **Linux privilege escalation lab** for classrooms, from the [MitsuruTech Learning Platform](https://mitsurutech.co.uk/learning), where schools and colleges give every student their own machines and terminal in the browser. Each student gets their own Ubuntu VM with a second, low-privilege account already on it, `intern`, and three ordinary administrator mistakes seeded for them to find: a helper program carrying the setuid bit it was never meant to have, a sudo rule that lets `intern` run one editor as root with no password, and a maintenance script root's own cron runs every minute that anybody can write to. The task is to use one of the three to reach root, read `/root/flag.txt`, and write up what was used.
@@ -53,4 +55,6 @@ More labs from the same place: [lab-netlab](https://github.com/mitsurutech/lab-n
 
 ## Licence
 
-The lab definition and this documentation are MIT licensed, see [LICENSE](LICENSE): copy them, change them, teach with them. Everything the setup installs, `cron` and `vim`, comes from Ubuntu's own archive when the VM starts; nothing of either is distributed here.
+This work is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/). You may share it and adapt it for learning and teaching, if you credit Mitsuru Technologies Ltd, do not use it commercially, and share anything you make from it under the same licence. The full text is in the `LICENSE` file.
+
+Everything the setup installs, `cron` and `vim`, comes from Ubuntu's own archive when the VM starts and keeps the licence of its own project; nothing of either is distributed here.
